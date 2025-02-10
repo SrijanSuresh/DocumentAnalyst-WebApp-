@@ -14,6 +14,7 @@ An intelligent document analysis system that allows users to upload documents an
   - PDF, DOCX, and TXT file support
   - Automatic text extraction and chunking
   - Metadata extraction and storage
+  - **AWS S3 Integration** for document storage
 - **Natural Language Querying**
   - Real-time chat interface
   - Context-aware responses
@@ -26,6 +27,8 @@ An intelligent document analysis system that allows users to upload documents an
   - ChromaDB integration
   - Document embedding
   - Semantic search capabilities
+- **Cache Management**
+  - **Redis integration via Docker** for caching
 
 ### 🚧 In Progress
 - **Enhanced Document Processing**
@@ -37,7 +40,6 @@ An intelligent document analysis system that allows users to upload documents an
   - Contextual follow-up questions
   - Query history and suggestions
 - **Storage Optimization**
-  - Integration with alternative storage providers
   - Document compression
   - Automatic cleanup of unused documents
 
@@ -62,7 +64,8 @@ An intelligent document analysis system that allows users to upload documents an
 - **Database**: ChromaDB (Vector Storage)
 - **AI Models**: Ollama (LLM)
 - **Authentication**: JWT Tokens
-- **Storage**: [To be decided]
+- **Storage**: AWS S3
+- **Cache**: Redis via Docker
 
 ### Frontend
 - **Framework**: Next.js 13
@@ -75,8 +78,9 @@ An intelligent document analysis system that allows users to upload documents an
 ### Prerequisites
 - Python 3.9+
 - Node.js 16+
-- Redis
+- Redis (Docker)
 - Ollama server
+- AWS S3 credentials
 
 ### Backend Setup
 ```bash
@@ -93,7 +97,10 @@ pip install -r requirements.txt
 
 # Set environment variables
 cp .env.example .env
-# Edit .env with your configuration
+# Edit .env with your AWS S3 and Redis configuration
+
+# Run Redis via Docker
+docker run --name redis -d -p 6379:6379 redis
 
 # Run server
 uvicorn main:app --reload
@@ -101,3 +108,7 @@ uvicorn main:app --reload
 # Run UI
 cd frontend/my-app
 npm run dev
+```
+
+### Note
+This project is not hosted due to budget constraints. Fork the repository and use your own AWS S3 and Redis keys to set up and run the application.
