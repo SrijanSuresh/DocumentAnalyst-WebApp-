@@ -16,6 +16,14 @@ import os
 import threading
 import asyncio
 
+import boto3
+import redis
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
 app = FastAPI()
 
 #CORS
@@ -26,6 +34,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ===== AWS S3 Setup =======
+# Adding AWS S3 Bucket Authentication Keys
+AWS_ACCESS_KEY_ID = os.getenv('ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('SECRET_ACCESS_KEY')
+AWS_S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
+AWS_REGION = "us-east-1"  # Match your bucket's region
+
+s3_client = boto3.client(
+    "s3",
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+    region_name=AWS_REGION
+)
+
+
+# ===== Redis Setup =======
+redis_client = redis.Redis(host="localhost", port=6379, db=0)
+
+
 
 # Configuration
 MODEL_NAME = "DR.TRUTH"
@@ -48,10 +76,16 @@ try:
         collection_name="document-chatbot",
     )
 except:
-    pass
+    print("No existing vector store found, will create new one when needed.")
+
 
 def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+# ----------------------------
+# File Upload Endpoint with S3 and Redis Integration
+# ----------------------------
 
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
@@ -86,6 +120,23 @@ async def upload_file(file: UploadFile = File(...)):
         )
         chunks = text_splitter.split_documents(documents)
         
+        # ----------------------------
+        # AWS S3: Upload the file to your S3 bucket.
+        # ----------------------------
+        # This stores the file in S3 so that each user’s document is persistently stored.
+        s3_client.upload_file(temp_path, AWS_S3_BUCKET_NAME, file.filename)
+        # Constructs the S3 URL for future reference.
+        file_url = f"https://{AWS_S3_BUCKET_NAME}.s3.amazonaws.com/{file.filename}"
+        
+        
+        
+        # ----------------------------
+        # Redis: Cache metadata about the uploaded file.
+        # ----------------------------
+        # We store the S3 URL and the number of chunks in Redis under a key that can be associated
+        # with the user (here, using the filename as an example key).
+        redis_client.hset(f"file:{file.filename}", mapping={"s3_url": file_url, "chunks": len(chunks)})
+        
         with vector_db_lock:
             global vector_db
             if vector_db is None:
@@ -114,6 +165,13 @@ async def chat(websocket: WebSocket):
         while True:
             question = await websocket.receive_text()
             
+            # Check if a cached response is available via Redis
+            cached_response = redis_client.get(f"chat:{question}")
+            if cached_response:
+                # If a cached response is found, send it immediately.
+                await websocket.send_text(cached_response.decode("utf-8"))
+                continue  # Proceed to the next question
+            
             if not vector_db:
                 await websocket.send_text("Please upload documents first!")
                 continue
@@ -138,10 +196,12 @@ async def chat(websocket: WebSocket):
             buffer = []
             buffer_size = 0
             last_flush = asyncio.get_event_loop().time()
+            full_response_chunks = []  # To store the complete answer for caching
             
             async for chunk in chain.astream(question):
                 content = chunk.content
                 buffer.append(content)
+                full_response_chunks.append(content)# Accumulate for caching  
                 buffer_size += len(content)
                 
                 # Flush buffer if size exceeds limit or time threshold passed
@@ -156,7 +216,11 @@ async def chat(websocket: WebSocket):
             # Send any remaining content
             if buffer:
                 await websocket.send_text("".join(buffer))
-    
+            # Redis: Cache the full response so subsequent identical questions are faster.
+            final_response = "".join(full_response_chunks)
+            # Cache the response with an expiration (e.g., 10 minutes).
+            redis_client.set(f"chat:{question}", final_response, ex=600)
+
     except Exception as e:
         print(f"WebSocket error: {e}")
     finally:

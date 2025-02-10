@@ -11,3 +11,8 @@ unstructured[all-docs]
 fastembed
 sentence-transformers
 elevenlabs
+fastapi
+python-multipart
+boto3
+redis
+python-dotenv

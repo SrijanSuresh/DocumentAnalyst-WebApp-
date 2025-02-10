@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"           # Exposes your FastAPI application on localhost:8000
+    environment:
+      AWS_ACCESS_KEY_ID: minio       # Credentials for MinIO
+      AWS_SECRET_ACCESS_KEY: minio123
+      AWS_S3_BUCKET_NAME: your-test-bucket
+      S3_ENDPOINT_URL: http://minio:9000  # Optional: if your code supports an endpoint override
+      # Other environment variables for your app can go here.
+    depends_on:
+      - redis
+      - minio
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"          # S3 API port
+      - "9001:9001"          # MinIO Console port
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
