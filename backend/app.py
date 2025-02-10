@@ -120,9 +120,7 @@ async def upload_file(file: UploadFile = File(...)):
         )
         chunks = text_splitter.split_documents(documents)
         
-        # ----------------------------
         # AWS S3: Upload the file to your S3 bucket.
-        # ----------------------------
         # This stores the file in S3 so that each user’s document is persistently stored.
         s3_client.upload_file(temp_path, AWS_S3_BUCKET_NAME, file.filename)
         # Constructs the S3 URL for future reference.
@@ -130,9 +128,7 @@ async def upload_file(file: UploadFile = File(...)):
         
         
         
-        # ----------------------------
         # Redis: Cache metadata about the uploaded file.
-        # ----------------------------
         # We store the S3 URL and the number of chunks in Redis under a key that can be associated
         # with the user (here, using the filename as an example key).
         redis_client.hset(f"file:{file.filename}", mapping={"s3_url": file_url, "chunks": len(chunks)})
